@@ -14,7 +14,7 @@
           pname = "nexon";
           version = "0.1.0";
           src = ./.;
-          vendorHash = pkgs.lib.fakeHash;
+          vendorHash = "sha256-t9oYPmkJJyQWXHdW1RV+CTrHoIN3r/nTr5jjq9vHmZ0=";
           subPackages = [ "cmd/nexon" ];
           ldflags = [ "-s" "-w" "-X" "github.com/BX-Team/Nexon/internal/cli.Version=0.1.0" ];
         };
