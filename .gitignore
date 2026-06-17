@@ -1,0 +1,25 @@
+# binaries
+/nexon
+/nexon.exe
+/out/
+
+# local state
+*.db
+*.db-wal
+*.db-shm
+nexon-data/
+smoke.db*
+
+# secrets / local config
+.env
+
+# nix
+result
+result-*
+
+# editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.claude/

@@ -1,0 +1,101 @@
+name: Release Nexon
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.2.3)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.goarm }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, goos: linux, goarch: amd64 } # native x86_64
+          - { runner: ubuntu-26.04-arm, goos: linux, goarch: arm64 } # native arm64
+          - { runner: ubuntu-latest, goos: linux, goarch: arm, goarm: "7" } # cross (no native armv7 runner)
+          - { runner: windows-latest, goos: windows, goarch: amd64 } # native windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Build static binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: "0"
+        run: |
+          NAME="nexon-${{ matrix.goos }}-${{ matrix.goarch }}"
+          [ "${{ matrix.goos }}" = "windows" ] && NAME="${NAME}.exe"
+          go build -trimpath \
+            -ldflags "-s -w -X github.com/BX-Team/Nexon/internal/cli.Version=${{ inputs.version }}" \
+            -o "${NAME}" ./cmd/nexon
+          sha256sum "${NAME}" > "${NAME}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexon-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
+          path: nexon-*
+
+  release:
+    name: create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Nexon ${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
+
+  bump-flake:
+    name: bump flake.nix version
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in flake.nix
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sed -i "s/version = \"[^\"]*\"/version = \"${VERSION}\"/" flake.nix
+          sed -i "s/cli\.Version=[^\"]*/cli.Version=${VERSION}/" flake.nix
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.nix
+          git diff --cached --quiet || git commit -m "chore: bump flake.nix to ${VERSION}"
+          git push

@@ -1,0 +1,162 @@
+package core
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"strconv"
+	"time"
+
+	"github.com/BX-Team/Nexon/internal/store"
+)
+
+// PollTraffic polls StatsService from every node, updates traffic, enforces limits, and returns records applied.
+func (s *Service) PollTraffic(ctx context.Context) (int, error) {
+	nodes, err := s.st.ListNodes()
+	if err != nil {
+		return 0, err
+	}
+	applied := 0
+	usersByName := map[string]*store.User{}
+	getUser := func(name string) *store.User {
+		if u, ok := usersByName[name]; ok {
+			return u
+		}
+		u, err := s.st.GetUserByName(name)
+		if err != nil {
+			return nil
+		}
+		usersByName[name] = u
+		return u
+	}
+
+	for _, n := range nodes {
+		conn := s.connect(n)
+		if _, err := conn.Connect(ctx); err != nil {
+			conn.Close()
+			continue
+		}
+		stats, err := conn.QueryStats(ctx, true) // reset counters after read
+		conn.Close()
+		if err != nil {
+			slog.Warn("query stats failed", "node", n.Name, "err", err)
+			continue
+		}
+		for _, st := range stats {
+			u := getUser(st.Email)
+			if u == nil {
+				continue
+			}
+			u.UsedTraffic += st.Uplink + st.Downlink
+			applied++
+		}
+	}
+
+	// Persist and enforce.
+	now := time.Now()
+	for _, u := range usersByName {
+		if err := s.st.UpdateUser(u); err != nil {
+			slog.Warn("persist traffic failed", "user", u.Username, "err", err)
+		}
+	}
+	s.resetTrafficPeriod(now)
+	s.enforceLimits(now)
+	return applied, nil
+}
+
+// resetDay returns the configured day-of-month for the monthly traffic reset
+// (default 20), clamped to a sane range.
+func (s *Service) resetDay() int {
+	v, err := s.st.GetSetting("traffic.reset_day")
+	if err != nil {
+		return 20
+	}
+	d, err := strconv.Atoi(v)
+	if err != nil || d < 1 || d > 28 {
+		return 20
+	}
+	return d
+}
+
+// periodStart returns the most recent reset boundary at or before now for the
+// given day-of-month (this month's reset time, or last month's if not reached).
+func periodStart(now time.Time, day int) time.Time {
+	thisMonth := time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, now.Location())
+	if now.Before(thisMonth) {
+		return thisMonth.AddDate(0, -1, 0)
+	}
+	return thisMonth
+}
+
+// resetTrafficPeriod zeroes used_traffic for users overdue for a monthly reset and re-activates limited users.
+func (s *Service) resetTrafficPeriod(now time.Time) {
+	boundary := periodStart(now, s.resetDay())
+	users, err := s.st.ListUsers("")
+	if err != nil {
+		return
+	}
+	for _, u := range users {
+		if u.TrafficResetAt != nil && !u.TrafficResetAt.Before(boundary) {
+			continue // already reset this period
+		}
+		wasLimited := u.Status == store.StatusLimited
+		u.UsedTraffic = 0
+		u.TrafficResetAt = &now
+		// Quota-limited users come back; expired/disabled stay as they are.
+		if wasLimited {
+			u.Status = store.StatusActive
+		}
+		if err := s.st.UpdateUser(u); err != nil {
+			continue
+		}
+		if wasLimited {
+			s.syncUserToNodes(u)
+		}
+		slog.Debug("traffic reset", "user", u.Username)
+	}
+}
+
+// enforceLimits scans all active users and limits/expires those over quota or
+// past their expiry, kicking them off every node.
+func (s *Service) enforceLimits(now time.Time) {
+	users, err := s.st.ListUsers(string(store.StatusActive))
+	if err != nil {
+		return
+	}
+	for _, u := range users {
+		var newStatus store.UserStatus
+		if u.ExpireAt != nil && u.ExpireAt.Before(now) {
+			newStatus = store.StatusExpired
+		} else if u.DataLimit > 0 && u.UsedTraffic >= u.DataLimit {
+			newStatus = store.StatusLimited
+		}
+		if newStatus != "" {
+			u.Status = newStatus
+			_ = s.st.UpdateUser(u)
+			s.removeUserFromNodes(u)
+			slog.Info("user auto-kicked", "user", u.Username, "status", newStatus)
+			_ = s.st.AddLog("warn", "enforcement", fmt.Sprintf("%s отключён: %s", u.Username, newStatus))
+		}
+	}
+}
+
+// RunPoller loops PollTraffic every interval until ctx is cancelled.
+func (s *Service) RunPoller(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n, err := s.PollTraffic(ctx); err != nil {
+				slog.Warn("poll cycle error", "err", err)
+			} else if n > 0 {
+				slog.Debug("poll cycle applied stats", "records", n)
+			}
+		}
+	}
+}
