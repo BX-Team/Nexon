@@ -6,16 +6,25 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/BX-Team/Nexon/internal/core"
 	"github.com/BX-Team/Nexon/internal/store"
 )
+
+// rulesReloadTTL bounds how stale the UA rules / client-app caches may get:
+// CLI/TUI edits run in a separate process and cannot invalidate them directly.
+const rulesReloadTTL = 30 * time.Second
 
 // Server is the subscription HTTP server.
 type Server struct {
 	svc      *core.Service
 	detector *Detector
 	baseURL  string
+
+	reloadMu   sync.Mutex
+	lastReload time.Time
 }
 
 // New builds a subscription server.
@@ -35,7 +44,21 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
+// refreshRules re-reads the UA detection rules and managed client apps from
+// the store at most once per TTL, so CLI edits reach a running server.
+func (s *Server) refreshRules() {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	if time.Since(s.lastReload) < rulesReloadTTL {
+		return
+	}
+	s.lastReload = time.Now()
+	_ = s.detector.Reload(s.svc.Store())
+	_ = s.svc.ReloadClients()
+}
+
 func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
+	s.refreshRules()
 	token := strings.TrimPrefix(r.URL.Path, "/sub/")
 	token = strings.Trim(token, "/")
 	if token == "" {
