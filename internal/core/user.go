@@ -33,6 +33,10 @@ func (s *Service) AddUser(p CreateUserParams) (*store.User, error) {
 	if reset == "" {
 		reset = "no_reset"
 	}
+	// Anchor the traffic-reset period at creation time. Without this, a new user
+	// has a nil TrafficResetAt, which resetTrafficPeriod treats as "overdue" and
+	// zeroes their traffic on the very first poll cycle.
+	now := time.Now()
 	u := &store.User{
 		Username:             p.Username,
 		Status:               store.StatusActive,
@@ -42,6 +46,7 @@ func (s *Service) AddUser(p CreateUserParams) (*store.User, error) {
 		HWIDLimit:            p.HWIDLimit,
 		Proxies:              proxies,
 		SubToken:             secrets.SubToken(),
+		TrafficResetAt:       &now,
 	}
 	if err := s.st.CreateUser(u); err != nil {
 		return nil, err

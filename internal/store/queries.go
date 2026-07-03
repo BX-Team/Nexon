@@ -41,9 +41,9 @@ func (s *Store) CreateUser(u *User) error {
 		return err
 	}
 	res, err := s.db.Exec(`
-		INSERT INTO users (username, status, data_limit, traffic_reset_strategy, expire_at, hwid_limit, proxies, sub_token)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		u.Username, string(u.Status), u.DataLimit, u.TrafficResetStrategy, fmtTime(u.ExpireAt), u.HWIDLimit, px, u.SubToken)
+		INSERT INTO users (username, status, data_limit, traffic_reset_strategy, expire_at, hwid_limit, proxies, sub_token, traffic_reset_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.Username, string(u.Status), u.DataLimit, u.TrafficResetStrategy, fmtTime(u.ExpireAt), u.HWIDLimit, px, u.SubToken, fmtTime(u.TrafficResetAt))
 	if err != nil {
 		return err
 	}

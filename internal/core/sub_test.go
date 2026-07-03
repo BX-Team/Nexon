@@ -59,3 +59,25 @@ func TestSubscriptionHWIDLimit(t *testing.T) {
 		t.Fatalf("active devices after re-admit = %d, want 2", n)
 	}
 }
+
+// TestAddUserAnchorsTrafficReset ensures a new user's traffic-reset timestamp is
+// set at creation, so the first poll cycle does not treat them as overdue and
+// wipe their freshly-recorded traffic.
+func TestAddUserAnchorsTrafficReset(t *testing.T) {
+	svc := testService(t)
+	u, err := svc.AddUser(CreateUserParams{Username: "bob"})
+	if err != nil {
+		t.Fatalf("add user: %v", err)
+	}
+	if u.TrafficResetAt == nil {
+		t.Fatal("TrafficResetAt should be set on creation")
+	}
+	// And it must be persisted, not just set in memory.
+	reloaded, err := svc.st.GetUserByName("bob")
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.TrafficResetAt == nil {
+		t.Fatal("TrafficResetAt should be persisted by CreateUser")
+	}
+}
