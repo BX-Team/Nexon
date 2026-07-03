@@ -120,7 +120,7 @@ INSERT INTO client_apps (name, ua_pattern, sort) VALUES
     ('Happ',        '^[Hh]app',                                              10),
     ('Clash Meta',  '[Cc]lash[\-\.]?[Mm]eta|[Mm]ihomo|[Ff][Ll][Cc]lash',    20),
     ('Clash',       '^([Cc]lash|[Cc]lash[\-\.]?[Vv]erge|[Ss]tash)',         30),
-    ('sing-box',    '(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify)|[Ss]ing[\-b]?ox', 40),
+    ('sing-box',    '(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify)|[Ss]ing[-_]?box', 40),
     ('v2rayNG',     '^([Vv]2rayNG|[Vv]2rayN)',                              50),
     ('Streisand',   '^[Ss]treisand',                                        60),
     ('Xray/V2Ray',  'INCY/[\d.]+|[Xx]ray|[Vv]2[Rr]ay',                      70);

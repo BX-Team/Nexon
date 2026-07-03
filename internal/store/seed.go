@@ -7,7 +7,7 @@ var DefaultSubRules = []SubRule{
 	{Priority: 30, Regex: `^[Hh]app`, Format: "happ"},
 	{Priority: 40, Regex: `INCY/[\d.]+`, Format: "xray"},
 	{Priority: 50, Regex: `^([Vv]2rayNG|[Vv]2rayN|[Ss]treisand|[Kk]tor\-client)`, Format: "xray"},
-	{Priority: 60, Regex: `^(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify[Nn]ext)|.*[Ss]ing[\-b]?ox.*`, Format: "singbox"},
+	{Priority: 60, Regex: `^(SFA|SFI|SFM|SFT|[Kk]aring|[Hh]iddify[Nn]ext)|.*[Ss]ing[-_]?box.*`, Format: "singbox"},
 	{Priority: 99, Regex: `.*`, Format: "base64"},
 }
 
