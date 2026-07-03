@@ -41,6 +41,11 @@ var rootCmd = &cobra.Command{
 		if dbPath != "" {
 			cfg.DBPath = dbPath
 		}
+		// Commands that never touch state must not require (or create) the DB.
+		switch cmd.Name() {
+		case "version", "update", "help", "completion", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+			return nil
+		}
 		var err error
 		st, err = store.Open(cfg.DBPath)
 		if err != nil {
