@@ -29,7 +29,7 @@ func init() {
 	userListCmd.Flags().Bool("json", false, "output JSON")
 
 	userSetCmd.Flags().String("data-limit", "", "new data limit, e.g. 200G")
-	userSetCmd.Flags().String("expire", "", "new expiry, e.g. +15d")
+	userSetCmd.Flags().String("expire", "", "new expiry, e.g. +15d ('never' = clear)")
 	userSetCmd.Flags().Int("hwid-limit", -1, "new device limit (-1 = leave unchanged)")
 }
 
@@ -120,11 +120,15 @@ var userSetCmd = &cobra.Command{
 		}
 		if cmd.Flags().Changed("expire") {
 			exp, _ := cmd.Flags().GetString("expire")
-			t, err := core.ParseDuration(exp, time.Now())
-			if err != nil {
-				return err
+			if exp == "" || exp == "never" || exp == "0" {
+				p.ClearExpire = true
+			} else {
+				t, err := core.ParseDuration(exp, time.Now())
+				if err != nil {
+					return err
+				}
+				p.ExpireAt = t
 			}
-			p.ExpireAt = t
 		}
 		if h, _ := cmd.Flags().GetInt("hwid-limit"); h >= 0 {
 			p.HWIDLimit = &h

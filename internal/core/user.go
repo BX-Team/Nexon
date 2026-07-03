@@ -76,7 +76,9 @@ func (s *Service) ListUsers(status string) ([]*store.User, error) {
 type SetUserParams struct {
 	DataLimit *int64
 	ExpireAt  *time.Time
-	HWIDLimit *int
+	// ClearExpire removes the expiry (nil ExpireAt alone means "unchanged").
+	ClearExpire bool
+	HWIDLimit   *int
 }
 
 // SetUser applies mutations to an existing user and re-syncs.
@@ -88,7 +90,10 @@ func (s *Service) SetUser(name string, p SetUserParams) (*store.User, error) {
 	if p.DataLimit != nil {
 		u.DataLimit = *p.DataLimit
 	}
-	if p.ExpireAt != nil {
+	if p.ClearExpire {
+		u.ExpireAt = nil
+		u.ExpiryNotifiedFor = nil
+	} else if p.ExpireAt != nil {
 		u.ExpireAt = p.ExpireAt
 	}
 	if p.HWIDLimit != nil {
