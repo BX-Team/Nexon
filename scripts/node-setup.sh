@@ -24,6 +24,12 @@ err() { printf '\033[1;31m[node]\033[0m %s\n' "$*" >&2; exit 1; }
 log "installing xray-core"
 bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
+if [ -s "$XRAY_CONF" ]; then
+  backup="${XRAY_CONF}.bak.$(date +%Y%m%d-%H%M%S)"
+  cp -a "$XRAY_CONF" "$backup"
+  warn "existing config backed up to ${backup} — merge your inbounds back manually"
+fi
+
 log "writing Xray API inbound to ${XRAY_CONF} (api on ${API_LISTEN}:${API_PORT})"
 cat > "$XRAY_CONF" <<EOF
 {
