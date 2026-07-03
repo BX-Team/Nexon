@@ -78,7 +78,8 @@ The repo ships a `flake.lock`, so every build is pinned and reproducible.
 #### NixOS deployment
 
 Add the flake as an input and import the module. It runs `nexon serve` as a
-hardened systemd unit (`DynamicUser`, `StateDirectory=nexon`):
+hardened systemd unit under a dedicated `nexon` user, puts the CLI in the
+system PATH, and provisions the state directory via `StateDirectory`:
 
 ```nix
 # flake.nix
@@ -110,14 +111,21 @@ All module options (`services.nexon.*`):
 | `enable` | `false` | Enable the Nexon service. |
 | `subBaseURL` | — (required) | Public base URL used to build subscription links. |
 | `subListen` | `:8080` | Subscription server listen address. |
-| `dataDir` | `/var/lib/nexon` | State directory (holds the SQLite database). |
+| `dataDir` | `/var/lib/nexon` | State directory (holds the SQLite database). Must live under `/var/lib`. |
 | `envFile` | `null` | File with extra `NEXON_*` vars, loaded via `EnvironmentFile`. |
 | `openFirewall` | `false` | Open the subscription port in the firewall. |
 | `package` | flake default | The `nexon` package to run. |
 
-Manage users/nodes on the host with the same binary, e.g.
-`sudo -u nexon nexon user add alice --data-limit 100G` (point `NEXON_DATA_DIR`
-at `dataDir` if you run it as another user).
+Manage users/nodes on the host with the same binary, always as the service
+user so the SQLite files keep one owner:
+
+```bash
+sudo -u nexon nexon user add alice --data-limit 100G
+```
+
+(Running the CLI as root would leave root-owned WAL files behind and lock the
+service out of its own database. If you changed `dataDir`, also pass
+`NEXON_DATA_DIR`.)
 
 ## Setting up a node
 

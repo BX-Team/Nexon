@@ -53,6 +53,26 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = lib.hasPrefix "/var/lib/" cfg.dataDir;
+        message = "services.nexon.dataDir must live under /var/lib (it is provisioned via systemd StateDirectory).";
+      }
+    ];
+
+    # Static user (not DynamicUser): the operator runs the same binary as
+    # `sudo -u nexon nexon ...` against the same SQLite database, which needs a
+    # stable owner. Root-invoked CLI would leave root-owned WAL files behind
+    # and lock the service out of its own state.
+    users.users.nexon = {
+      isSystemUser = true;
+      group = "nexon";
+      description = "Nexon control-plane";
+    };
+    users.groups.nexon = { };
+
+    environment.systemPackages = [ cfg.package ];
+
     systemd.services.nexon = {
       description = "Nexon control-plane";
       wantedBy = [ "multi-user.target" ];
@@ -67,8 +87,15 @@ in
         ExecStart = "${cfg.package}/bin/nexon serve";
         Restart = "on-failure";
         RestartSec = 3;
-        StateDirectory = "nexon";
-        DynamicUser = true;
+        User = "nexon";
+        Group = "nexon";
+        StateDirectory = lib.removePrefix "/var/lib/" cfg.dataDir;
+        StateDirectoryMode = "0750";
+        UMask = "0027";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
         EnvironmentFile = lib.mkIf (cfg.envFile != null) cfg.envFile;
       };
     };
