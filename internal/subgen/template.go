@@ -69,8 +69,6 @@ func StarterTemplate(format string) string {
 	return ""
 }
 
-// ───────────────────────── per-format fragmenters ──────────────────────────
-
 type clashFrag struct{ meta bool }
 
 func (c clashFrag) contentType() string { return "text/yaml; charset=utf-8" }
@@ -118,8 +116,6 @@ func marshalIndented(v any) string {
 	b, _ := json.MarshalIndent(v, "    ", "  ")
 	return "    " + string(b)
 }
-
-// ───────────────────────── starter templates ───────────────────────────────
 
 // {{ .Proxies }} expands to the generated proxy entries; {{ .Names }} are their
 // names. Everything else (tun/dns/sniffer/rules) is yours to edit.

@@ -32,8 +32,6 @@ func fmtTime(t *time.Time) any {
 	return t.UTC().Format(tsLayout)
 }
 
-// ---- Users ----
-
 // CreateUser inserts a new user. Proxies and sub_token must be set by caller.
 func (s *Store) CreateUser(u *User) error {
 	px, err := u.Proxies.Marshal()
@@ -160,8 +158,6 @@ func (s *Store) DeleteUser(id int64) error {
 	return err
 }
 
-// ---- Nodes ----
-
 func (s *Store) CreateNode(n *Node) error {
 	res, err := s.db.Exec(`
 		INSERT INTO nodes (name, address, api_port, status)
@@ -242,8 +238,6 @@ func (s *Store) DeleteNode(id int64) error {
 	return err
 }
 
-// ---- Inbounds ----
-
 func (s *Store) ListInbounds(nodeID int64) ([]*Inbound, error) {
 	rows, err := s.db.Query(`SELECT id, node_id, tag, protocol, network, tls, port, settings_json FROM inbounds WHERE node_id=? ORDER BY id`, nodeID)
 	if err != nil {
@@ -298,8 +292,6 @@ func (s *Store) UpsertInbound(in *Inbound) error {
 		in.NodeID, in.Tag, in.Protocol, in.Network, in.TLS, in.Port, in.SettingsJSON)
 	return err
 }
-
-// ---- Devices ----
 
 // RegisterDevice records or refreshes a device for a user. Returns the device
 // and whether it is newly created.
@@ -394,8 +386,6 @@ func (s *Store) UnrevokeDevice(userID, deviceID int64) error {
 	return err
 }
 
-// ---- Settings ----
-
 func (s *Store) GetSetting(key string) (string, error) {
 	var v string
 	err := s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
@@ -409,8 +399,6 @@ func (s *Store) SetSetting(key, value string) error {
 	_, err := s.db.Exec(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
 	return err
 }
-
-// ---- Sub rules ----
 
 // SubRule is an ordered UA→format detection rule.
 type SubRule struct {

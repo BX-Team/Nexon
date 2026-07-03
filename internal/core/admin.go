@@ -94,8 +94,6 @@ func (s *Service) AdminDeleteUser(id int64) error {
 	return s.DeleteUser(u.Username)
 }
 
-// ---- Settings ----
-
 // GetResetDay returns the configured monthly traffic-reset day (default 20).
 func (s *Service) GetResetDay() int { return s.resetDay() }
 

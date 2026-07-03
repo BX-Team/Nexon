@@ -118,8 +118,6 @@ func (p *nodesPanel) view() string {
 	return p.tbl.View() + "\n" + statusLine(p.status, help)
 }
 
-// ───────────────────────── shared table helpers ────────────────────────────
-
 func newStyledTable(cols []table.Column) table.Model {
 	t := table.New(table.WithColumns(cols), table.WithFocused(true), table.WithHeight(10))
 	st := table.DefaultStyles()
