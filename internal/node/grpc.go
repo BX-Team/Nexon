@@ -50,7 +50,8 @@ func (c *GRPCConnector) Connect(ctx context.Context) (string, error) {
 		c.conn = nil
 		return "", fmt.Errorf("xray API unreachable: %w", err)
 	}
-	return "xray", nil
+	// The xray gRPC API exposes no version RPC; report unknown rather than a fake value.
+	return "", nil
 }
 
 // AddUser adds an account to an inbound via AlterInbound + AddUserOperation.

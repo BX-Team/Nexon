@@ -98,8 +98,8 @@ func TestGRPCConnector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if ver != "xray" {
-		t.Fatalf("version = %q, want xray", ver)
+	if ver != "" {
+		t.Fatalf("version = %q, want empty (API has no version RPC)", ver)
 	}
 	defer conn.Close()
 
