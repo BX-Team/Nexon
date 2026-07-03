@@ -140,6 +140,13 @@ func (s *Store) UpdateUser(u *User) error {
 	return err
 }
 
+// AddUserTraffic atomically adds delta bytes to a user's used traffic, so the
+// poller never overwrites concurrent CLI/TUI edits with a stale row.
+func (s *Store) AddUserTraffic(userID, delta int64) error {
+	_, err := s.db.Exec(`UPDATE users SET used_traffic = used_traffic + ? WHERE id=?`, delta, userID)
+	return err
+}
+
 // TouchSub records the last User-Agent/time a user fetched their subscription.
 func (s *Store) TouchSub(userID int64, ua string) error {
 	_, err := s.db.Exec(`UPDATE users SET sub_last_user_agent=?, sub_updated_at=? WHERE id=?`,

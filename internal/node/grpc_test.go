@@ -22,9 +22,10 @@ type fakeXray struct {
 	command.UnimplementedHandlerServiceServer
 	statscmd.UnimplementedStatsServiceServer
 
-	mu    sync.Mutex
-	users map[string]string // "tag/email" -> account type URL
-	stats map[string]int64  // stat name -> value
+	mu     sync.Mutex
+	users  map[string]string // "tag/email" -> account type URL
+	stats  map[string]int64  // stat name -> value
+	uptime uint32
 }
 
 func (f *fakeXray) key(tag, email string) string { return tag + "/" + email }
@@ -62,6 +63,12 @@ func (f *fakeXray) QueryStats(_ context.Context, _ *statscmd.QueryStatsRequest) 
 		stats = append(stats, &statscmd.Stat{Name: name, Value: val})
 	}
 	return &statscmd.QueryStatsResponse{Stat: stats}, nil
+}
+
+func (f *fakeXray) GetSysStats(_ context.Context, _ *statscmd.SysStatsRequest) (*statscmd.SysStatsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &statscmd.SysStatsResponse{Uptime: f.uptime}, nil
 }
 
 // startFakeXray spins the fake server on a random localhost port.
@@ -146,6 +153,18 @@ func TestGRPCConnector(t *testing.T) {
 	}
 	if _, ok := got["api"]; ok {
 		t.Fatal("non-user stat leaked into results")
+	}
+
+	// Uptime comes from GetSysStats.
+	fake.mu.Lock()
+	fake.uptime = 42
+	fake.mu.Unlock()
+	up, err := conn.Uptime(ctx)
+	if err != nil {
+		t.Fatalf("uptime: %v", err)
+	}
+	if up != 42 {
+		t.Fatalf("uptime = %d, want 42", up)
 	}
 }
 

@@ -34,6 +34,9 @@ type Connector interface {
 	RemoveUser(ctx context.Context, tag, email string) error
 	// QueryStats reads and (optionally) resets per-user traffic (StatsService).
 	QueryStats(ctx context.Context, reset bool) ([]Stat, error)
+	// Uptime returns the node's xray process uptime in seconds (StatsService),
+	// used to detect restarts that wiped the in-memory user list.
+	Uptime(ctx context.Context) (int64, error)
 	// Inbounds returns the inbounds the node currently exposes.
 	Inbounds(ctx context.Context) ([]*store.Inbound, error)
 	// Close tears down the session.

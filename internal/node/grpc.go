@@ -114,6 +114,15 @@ func (c *GRPCConnector) QueryStats(ctx context.Context, reset bool) ([]Stat, err
 	return out, nil
 }
 
+// Uptime returns the xray process uptime in seconds via GetSysStats.
+func (c *GRPCConnector) Uptime(ctx context.Context) (int64, error) {
+	resp, err := c.stats.GetSysStats(ctx, &statscmd.SysStatsRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int64(resp.GetUptime()), nil
+}
+
 // Inbounds returns nil; inbounds are admin-defined in the DB to preserve port/TLS details.
 func (c *GRPCConnector) Inbounds(ctx context.Context) ([]*store.Inbound, error) {
 	return nil, nil

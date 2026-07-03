@@ -7,61 +7,83 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BX-Team/Nexon/internal/node"
 	"github.com/BX-Team/Nexon/internal/store"
 )
 
-// PollTraffic polls StatsService from every node, updates traffic, enforces limits, and returns records applied.
+// PollTraffic polls StatsService from every node, updates traffic and node
+// status, re-syncs restarted nodes, enforces limits, and returns records applied.
 func (s *Service) PollTraffic(ctx context.Context) (int, error) {
 	nodes, err := s.st.ListNodes()
 	if err != nil {
 		return 0, err
 	}
 	applied := 0
-	usersByName := map[string]*store.User{}
-	getUser := func(name string) *store.User {
-		if u, ok := usersByName[name]; ok {
-			return u
-		}
-		u, err := s.st.GetUserByName(name)
-		if err != nil {
-			return nil
-		}
-		usersByName[name] = u
-		return u
-	}
+	deltas := map[string]int64{}
+	var resync []string
 
 	for _, n := range nodes {
-		conn := s.connect(n)
-		if _, err := conn.Connect(ctx); err != nil {
-			conn.Close()
+		stats, restarted, err := s.pollNode(ctx, n)
+		if err != nil {
+			slog.Warn("poll node failed", "node", n.Name, "err", err)
+			_ = s.st.UpdateNodeStatus(n.ID, "error", n.XrayVersion)
 			continue
 		}
-		stats, err := conn.QueryStats(ctx, true) // reset counters after read
-		conn.Close()
-		if err != nil {
-			slog.Warn("query stats failed", "node", n.Name, "err", err)
-			continue
+		_ = s.st.UpdateNodeStatus(n.ID, "connected", n.XrayVersion)
+		if restarted {
+			resync = append(resync, n.Name)
 		}
 		for _, st := range stats {
-			u := getUser(st.Email)
-			if u == nil {
-				continue
-			}
-			u.UsedTraffic += st.Uplink + st.Downlink
+			deltas[st.Email] += st.Uplink + st.Downlink
 			applied++
 		}
 	}
 
-	// Persist and enforce.
-	now := time.Now()
-	for _, u := range usersByName {
-		if err := s.st.UpdateUser(u); err != nil {
-			slog.Warn("persist traffic failed", "user", u.Username, "err", err)
+	for email, delta := range deltas {
+		if delta == 0 {
+			continue
+		}
+		u, err := s.st.GetUserByName(email)
+		if err != nil {
+			continue // stats for a user Nexon no longer knows
+		}
+		if err := s.st.AddUserTraffic(u.ID, delta); err != nil {
+			slog.Warn("persist traffic failed", "user", email, "err", err)
 		}
 	}
+
+	// Restarted xray lost its in-memory users: push them back.
+	for _, name := range resync {
+		slog.Info("node restart detected, resyncing users", "node", name)
+		if err := s.SyncNode(name); err != nil {
+			slog.Warn("resync after restart failed", "node", name, "err", err)
+		}
+	}
+
+	now := time.Now()
 	s.resetTrafficPeriod(now)
 	s.enforceLimits(now)
 	return applied, nil
+}
+
+// pollNode reads one node's stats and restart flag under a per-node timeout,
+// so one hung node cannot stall the whole poll cycle.
+func (s *Service) pollNode(ctx context.Context, n *store.Node) (stats []node.Stat, restarted bool, err error) {
+	nctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	conn := s.connect(n)
+	defer conn.Close()
+	if _, err := conn.Connect(nctx); err != nil {
+		return nil, false, err
+	}
+	stats, err = conn.QueryStats(nctx, true) // reset counters after read
+	if err != nil {
+		return nil, false, err
+	}
+	if uptime, uerr := conn.Uptime(nctx); uerr == nil {
+		restarted = s.nodeRestarted(n.ID, uptime)
+	}
+	return stats, restarted, nil
 }
 
 // resetDay returns the configured day-of-month for the monthly traffic reset

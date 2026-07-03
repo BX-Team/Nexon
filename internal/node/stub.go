@@ -37,6 +37,11 @@ func (c *StubConnector) QueryStats(ctx context.Context, reset bool) ([]Stat, err
 	return nil, nil
 }
 
+func (c *StubConnector) Uptime(ctx context.Context) (int64, error) {
+	// Constant: after the first poll cycle the stub never looks restarted.
+	return 1, nil
+}
+
 func (c *StubConnector) Inbounds(ctx context.Context) ([]*store.Inbound, error) {
 	return nil, nil
 }
