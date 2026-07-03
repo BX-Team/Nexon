@@ -11,7 +11,7 @@ type singboxGen struct{}
 
 func (singboxGen) Render(_ *store.User, eps []Endpoint) ([]byte, string) {
 	outbounds := make([]map[string]any, 0, len(eps)+2)
-	var tags []string
+	tags := []string{} // never nil: a null selector outbound list breaks sing-box
 	for _, e := range eps {
 		ob := singboxOutbound(e)
 		if ob == nil {
