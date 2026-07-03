@@ -65,27 +65,59 @@ go build -o nexon ./cmd/nexon
 
 ### Nix / NixOS
 
-Run directly from the flake:
+Run directly from the flake, or build a local binary:
 
 ```bash
-nix run github:BX-Team/Nexon -- --help
+nix run github:BX-Team/Nexon -- --help      # run without installing
+nix build github:BX-Team/Nexon              # ./result/bin/nexon
+nix develop                                 # dev shell with go, gopls, sqlite
 ```
 
-Declarative NixOS deployment via the module:
+The repo ships a `flake.lock`, so every build is pinned and reproducible.
+
+#### NixOS deployment
+
+Add the flake as an input and import the module. It runs `nexon serve` as a
+hardened systemd unit (`DynamicUser`, `StateDirectory=nexon`):
 
 ```nix
+# flake.nix
 {
   inputs.nexon.url = "github:BX-Team/Nexon";
 
-  # in your configuration.nix:
-  imports = [ inputs.nexon.nixosModules.nexon ];
-  services.nexon = {
-    enable = true;
-    subBaseURL = "https://vpn.example.com";
-    openFirewall = true;          # opens the subscription port
+  outputs = { self, nixpkgs, nexon, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      # ...
+      modules = [
+        nexon.nixosModules.nexon
+        ({ ... }: {
+          services.nexon = {
+            enable = true;
+            subBaseURL = "https://vpn.example.com";  # required: public URL for sub links
+            openFirewall = true;                     # open the subscription port
+          };
+        })
+      ];
+    };
   };
 }
 ```
+
+All module options (`services.nexon.*`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `enable` | `false` | Enable the Nexon service. |
+| `subBaseURL` | — (required) | Public base URL used to build subscription links. |
+| `subListen` | `:8080` | Subscription server listen address. |
+| `dataDir` | `/var/lib/nexon` | State directory (holds the SQLite database). |
+| `envFile` | `null` | File with extra `NEXON_*` vars, loaded via `EnvironmentFile`. |
+| `openFirewall` | `false` | Open the subscription port in the firewall. |
+| `package` | flake default | The `nexon` package to run. |
+
+Manage users/nodes on the host with the same binary, e.g.
+`sudo -u nexon nexon user add alice --data-limit 100G` (point `NEXON_DATA_DIR`
+at `dataDir` if you run it as another user).
 
 ## Setting up a node
 
@@ -129,7 +161,7 @@ in a browser shows an HTML dashboard with a QR code.
 | Command | Purpose |
 |---|---|
 | `user` | create/list/edit users, show sub link + QR, devices |
-| `node` | register nodes, manage inbounds, sync, view traffic |
+| `node` | register nodes, manage inbounds, sync, show status (`list`/`show`/`inbounds`) |
 | `group` | node groups; assign users/nodes to groups |
 | `clients` | managed client apps: UA → custom headers + pinned output format |
 | `template` | custom per-format subscription templates (`list`/`show`/`edit`/`preview`/`rm`) |
