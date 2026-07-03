@@ -88,14 +88,34 @@ func periodStart(now time.Time, day int) time.Time {
 	return thisMonth
 }
 
-// resetTrafficPeriod zeroes used_traffic for users overdue for a monthly reset and re-activates limited users.
+// resetBoundary returns the most recent reset boundary for a strategy, or
+// ok=false when the strategy never resets (no_reset or unknown).
+func resetBoundary(strategy string, now time.Time, monthDay int) (time.Time, bool) {
+	switch strategy {
+	case "day":
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), true
+	case "week":
+		monday := now.AddDate(0, 0, -((int(now.Weekday()) + 6) % 7))
+		return time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, now.Location()), true
+	case "month":
+		return periodStart(now, monthDay), true
+	}
+	return time.Time{}, false
+}
+
+// resetTrafficPeriod zeroes used_traffic for users overdue per their own reset
+// strategy and re-activates limited users.
 func (s *Service) resetTrafficPeriod(now time.Time) {
-	boundary := periodStart(now, s.resetDay())
 	users, err := s.st.ListUsers("")
 	if err != nil {
 		return
 	}
+	day := s.resetDay()
 	for _, u := range users {
+		boundary, ok := resetBoundary(u.TrafficResetStrategy, now, day)
+		if !ok {
+			continue
+		}
 		if u.TrafficResetAt != nil && !u.TrafficResetAt.Before(boundary) {
 			continue // already reset this period
 		}

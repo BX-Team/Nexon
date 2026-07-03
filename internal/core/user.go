@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/BX-Team/Nexon/internal/secrets"
@@ -32,6 +33,11 @@ func (s *Service) AddUser(p CreateUserParams) (*store.User, error) {
 	reset := p.ResetStrategy
 	if reset == "" {
 		reset = "no_reset"
+	}
+	switch reset {
+	case "no_reset", "day", "week", "month":
+	default:
+		return nil, fmt.Errorf("invalid reset strategy %q (no_reset|day|week|month)", reset)
 	}
 	// Anchor the traffic-reset period at creation time. Without this, a new user
 	// has a nil TrafficResetAt, which resetTrafficPeriod treats as "overdue" and
@@ -161,8 +167,8 @@ func ParseDuration(spec string, base time.Time) (*time.Time, error) {
 	}
 	// Support the "d" suffix that time.ParseDuration lacks.
 	if n := len(spec); n > 1 && spec[n-1] == 'd' {
-		var days int
-		if _, err := fmt.Sscanf(spec[:n-1], "%d", &days); err != nil {
+		days, err := strconv.Atoi(spec[:n-1])
+		if err != nil {
 			return nil, fmt.Errorf("invalid duration %q", spec)
 		}
 		t := base.AddDate(0, 0, days)
