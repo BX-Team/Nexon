@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/BX-Team/Nexon/internal/store"
@@ -32,9 +33,12 @@ func (s *Service) Subscription(token, ua, hwid, ip string) (*SubResult, error) {
 		return nil, ErrSubDenied
 	}
 
-	// Device registration + HWID limit enforcement.
+	// Device registration + HWID limit enforcement. Browsers are skipped: they
+	// get the HTML dashboard, must never consume a device slot, and must not be
+	// locked out of their own dashboard once the limit is reached.
 	newDevice := false
-	if hwid != "" || ua != "" {
+	browser := strings.HasPrefix(ua, "Mozilla/")
+	if hwid != "" || (ua != "" && !browser) {
 		dev, created, derr := s.st.RegisterDevice(u.ID, hwid, ua, ip)
 		if derr == nil {
 			newDevice = created

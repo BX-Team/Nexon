@@ -60,6 +60,36 @@ func TestSubscriptionHWIDLimit(t *testing.T) {
 	}
 }
 
+// TestSubscriptionBrowserSkipsDeviceSlot ensures browser fetches (the HTML
+// dashboard) never consume an HWID slot and keep working at the limit.
+func TestSubscriptionBrowserSkipsDeviceSlot(t *testing.T) {
+	svc := testService(t)
+	u, err := svc.AddUser(CreateUserParams{Username: "alice", HWIDLimit: 1})
+	if err != nil {
+		t.Fatalf("add user: %v", err)
+	}
+	tok := u.SubToken
+	browserUA := "Mozilla/5.0 (X11; Linux x86_64) Firefox/128.0"
+
+	// Browser first: must not register a device.
+	if _, err := svc.Subscription(tok, browserUA, "", "1.1.1.1"); err != nil {
+		t.Fatalf("browser fetch failed: %v", err)
+	}
+	if n, _ := svc.st.CountActiveDevices(u.ID); n != 0 {
+		t.Fatalf("browser consumed a device slot: active = %d", n)
+	}
+
+	// The real client still fits into the limit of 1.
+	if _, err := svc.Subscription(tok, "Happ/2.0", "", "1.1.1.1"); err != nil {
+		t.Fatalf("real device should be admitted: %v", err)
+	}
+
+	// At the limit the browser dashboard must still be served.
+	if _, err := svc.Subscription(tok, browserUA, "", "1.1.1.1"); err != nil {
+		t.Fatalf("browser fetch at limit failed: %v", err)
+	}
+}
+
 // TestAddUserAnchorsTrafficReset ensures a new user's traffic-reset timestamp is
 // set at creation, so the first poll cycle does not treat them as overdue and
 // wipe their freshly-recorded traffic.
