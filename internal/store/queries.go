@@ -380,6 +380,13 @@ func (s *Store) RevokeDevice(userID, deviceID int64) error {
 	return err
 }
 
+// UnrevokeDevice re-activates a previously revoked device slot (e.g. when a
+// kicked device reconnects and there is room under the HWID limit again).
+func (s *Store) UnrevokeDevice(userID, deviceID int64) error {
+	_, err := s.db.Exec(`UPDATE devices SET revoked=0 WHERE user_id=? AND id=?`, userID, deviceID)
+	return err
+}
+
 // ---- Settings ----
 
 func (s *Store) GetSetting(key string) (string, error) {

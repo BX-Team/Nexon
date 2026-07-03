@@ -38,11 +38,28 @@ func (s *Service) Subscription(token, ua, hwid, ip string) (*SubResult, error) {
 		dev, created, derr := s.st.RegisterDevice(u.ID, hwid, ua, ip)
 		if derr == nil {
 			newDevice = created
-			if created && u.HWIDLimit > 0 {
-				if n, _ := s.st.CountActiveDevices(u.ID); n > u.HWIDLimit {
-					// Over the limit: revoke the just-added device and deny.
-					_ = s.st.RevokeDevice(u.ID, dev.ID)
+			// A fetch needs a free slot when the device is brand-new, or when a
+			// previously kicked (revoked) device comes back. Already-active
+			// devices are always allowed. Without this, a revoked device would be
+			// matched by UA on retry (created=false) and silently bypass the limit.
+			if created || dev.Revoked {
+				active, _ := s.st.CountActiveDevices(u.ID)
+				projected := active
+				if !created {
+					// A revoked device is not counted in active yet; admitting it adds one.
+					projected = active + 1
+				}
+				if u.HWIDLimit > 0 && projected > u.HWIDLimit {
+					if created {
+						// Roll back the just-added row so it doesn't occupy a slot.
+						_ = s.st.RevokeDevice(u.ID, dev.ID)
+					}
 					return nil, ErrSubDenied
+				}
+				if !created && dev.Revoked {
+					// Room is available: re-admit the returning device.
+					_ = s.st.UnrevokeDevice(u.ID, dev.ID)
+					newDevice = true
 				}
 			}
 		}
