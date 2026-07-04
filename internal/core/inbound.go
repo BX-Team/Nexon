@@ -15,6 +15,7 @@ type AddInboundParams struct {
 	Network      string
 	TLS          string
 	SettingsJSON string
+	Remark       string
 }
 
 // AddInbound registers an inbound on a node and resyncs active users to it.
@@ -37,6 +38,7 @@ func (s *Service) AddInbound(p AddInboundParams) (*store.Inbound, error) {
 		Network:      p.Network,
 		TLS:          p.TLS,
 		SettingsJSON: p.SettingsJSON,
+		Remark:       p.Remark,
 	}
 	if err := s.st.UpsertInbound(in); err != nil {
 		return nil, err

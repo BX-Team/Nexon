@@ -73,8 +73,12 @@ func BuildEndpoints(u *store.User, inbounds []*store.Inbound, addrFor func(nodeI
 		if in.SettingsJSON != "" {
 			_ = json.Unmarshal([]byte(in.SettingsJSON), &settings)
 		}
+		name := in.Remark
+		if name == "" {
+			name = fmt.Sprintf("%s-%s", nodeName, in.Tag)
+		}
 		ep := Endpoint{
-			Name:     fmt.Sprintf("%s-%s", nodeName, in.Tag),
+			Name:     name,
 			Protocol: in.Protocol,
 			Address:  addr,
 			Port:     in.Port,

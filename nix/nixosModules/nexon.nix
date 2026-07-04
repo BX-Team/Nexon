@@ -83,6 +83,13 @@ in
         NEXON_SUB_LISTEN = cfg.subListen;
         NEXON_SUB_BASE_URL = cfg.subBaseURL;
       };
+      preStart = ''
+        umask 077
+        cat > "${cfg.dataDir}/.env" <<EOF
+        NEXON_SUB_LISTEN=${cfg.subListen}
+        NEXON_SUB_BASE_URL=${cfg.subBaseURL}
+        EOF
+      '';
       serviceConfig = {
         ExecStart = "${cfg.package}/bin/nexon serve";
         Restart = "on-failure";

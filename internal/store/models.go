@@ -98,6 +98,8 @@ type Inbound struct {
 	TLS          string
 	Port         int
 	SettingsJSON string
+	// Remark overrides the subscription endpoint name; empty = "<node>-<tag>".
+	Remark string
 }
 
 // Device is a registered client (HWID/UA) for device-limit enforcement.

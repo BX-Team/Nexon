@@ -21,6 +21,7 @@ func init() {
 	inboundAddCmd.Flags().String("network", "tcp", "transport: tcp|ws|grpc")
 	inboundAddCmd.Flags().String("tls", "", "security: tls|reality (empty = none)")
 	inboundAddCmd.Flags().String("settings", "{}", "JSON: sni, host, path, pbk, sid, fp…")
+	inboundAddCmd.Flags().String("remark", "", "subscription display name (empty = <node>-<tag>)")
 	_ = inboundAddCmd.MarkFlagRequired("tag")
 	_ = inboundAddCmd.MarkFlagRequired("protocol")
 
@@ -131,9 +132,10 @@ var inboundAddCmd = &cobra.Command{
 		network, _ := cmd.Flags().GetString("network")
 		tls, _ := cmd.Flags().GetString("tls")
 		settings, _ := cmd.Flags().GetString("settings")
+		remark, _ := cmd.Flags().GetString("remark")
 		in, err := svc.AddInbound(core.AddInboundParams{
 			NodeName: args[0], Tag: tag, Protocol: proto, Port: port,
-			Network: network, TLS: tls, SettingsJSON: settings,
+			Network: network, TLS: tls, SettingsJSON: settings, Remark: remark,
 		})
 		if err != nil {
 			return err

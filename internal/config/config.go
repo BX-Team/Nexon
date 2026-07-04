@@ -30,6 +30,8 @@ type Config struct {
 func Default() Config {
 	loadDotEnv(".env")
 	dataDir := envOr("NEXON_DATA_DIR", defaultDataDir())
+	// CLI/TUI don't inherit the systemd service env; the data-dir .env lets them read the same NEXON_* config.
+	loadDotEnv(filepath.Join(dataDir, ".env"))
 	cfg := Config{
 		DataDir:             dataDir,
 		DBPath:              envOr("NEXON_DB", filepath.Join(dataDir, "nexon.db")),
