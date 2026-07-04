@@ -28,9 +28,10 @@ jobs:
           - { runner: ubuntu-latest, goos: linux, goarch: arm, goarm: "7" } # cross (no native armv7 runner)
           - { runner: windows-latest, goos: windows, goarch: amd64 } # native windows
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
 
@@ -49,7 +50,7 @@ jobs:
             -o "${NAME}" ./cmd/nexon
           sha256sum "${NAME}" > "${NAME}.sha256"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nexon-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
           path: nexon-*
@@ -59,7 +60,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -79,7 +80,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -99,3 +101,29 @@ jobs:
           git add flake.nix
           git diff --cached --quiet || git commit -m "chore: bump flake.nix to ${VERSION}"
           git push
+
+  cachix:
+    name: build and push to cachix
+    needs: bump-flake
+    runs-on: ubuntu-latest
+    if: ${{ ! inputs.prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: master
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: bx-team
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build and push the flake package
+        run: nix build --print-build-logs .#nexon
