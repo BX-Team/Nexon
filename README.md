@@ -32,7 +32,7 @@ nodes over the Xray gRPC API.
 ### Ubuntu / Debian (and other systemd Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BX-Team/Nexon/main/scripts/install.sh -o /tmp/nexon.sh \
+curl -fsSL https://raw.githubusercontent.com/BX-Team/Nexon/master/scripts/install.sh -o /tmp/nexon.sh \
   && sudo bash /tmp/nexon.sh install
 ```
 
@@ -133,7 +133,7 @@ A node is a VPS running `xray-core` with its gRPC API enabled. The helper script
 installs Xray and writes an API inbound:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BX-Team/Nexon/main/scripts/node-setup.sh | sudo API_PORT=8443 bash
+curl -fsSL https://raw.githubusercontent.com/BX-Team/Nexon/master/scripts/node-setup.sh | sudo API_PORT=8443 bash
 ```
 
 Then add your real proxy inbounds (vless/trojan/hysteria2…) to
