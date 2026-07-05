@@ -12,11 +12,11 @@
         pkgs = import nixpkgs { inherit system; };
         nexon = pkgs.buildGoModule {
           pname = "nexon";
-          version = "1.0.1";
+          version = "1.1.0";
           src = ./.;
           vendorHash = "sha256-t9oYPmkJJyQWXHdW1RV+CTrHoIN3r/nTr5jjq9vHmZ0=";
           subPackages = [ "cmd/nexon" ];
-          ldflags = [ "-s" "-w" "-X" "github.com/BX-Team/Nexon/internal/cli.Version=1.0.1" ];
+          ldflags = [ "-s" "-w" "-X" "github.com/BX-Team/Nexon/internal/cli.Version=1.1.0" ];
         };
       in
       {
