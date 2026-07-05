@@ -10,7 +10,7 @@ func newInput(placeholder, value string) textinput.Model {
 	in := textinput.New()
 	in.Placeholder = placeholder
 	in.SetValue(value)
-	in.CharLimit = 256
+	in.CharLimit = 0
 	in.Width = 40
 	in.Prompt = "" // labels are rendered separately
 	return in
