@@ -12,7 +12,7 @@ import (
 // dashLink is one connectable endpoint rendered as a copyable row.
 type dashLink struct {
 	Name string
-	URI  string
+	URI  template.URL
 }
 
 var dashboardTmpl = template.Must(template.New("dash").Parse(`<!doctype html>
@@ -196,7 +196,7 @@ func (s *Server) renderDashboard(w http.ResponseWriter, res *core.SubResult, tok
 	links := make([]dashLink, 0, len(res.Endpoints))
 	for _, ep := range res.Endpoints {
 		if uri := ep.URI(); uri != "" {
-			links = append(links, dashLink{Name: ep.Name, URI: uri})
+			links = append(links, dashLink{Name: ep.Name, URI: template.URL(uri)})
 		}
 	}
 
