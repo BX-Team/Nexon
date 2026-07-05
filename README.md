@@ -168,9 +168,10 @@ in a browser shows an HTML dashboard with a QR code.
 
 | Command | Purpose |
 |---|---|
-| `user` | create/list/edit users, show sub link + QR, devices |
+| `user` | create/list/edit users, show sub link + QR, rotate token, devices |
 | `node` | register nodes, manage inbounds, sync, show status (`list`/`show`/`inbounds`) |
-| `group` | node groups; assign users/nodes to groups |
+| `group` | node groups; assign users/nodes to groups, set the default group |
+| `migrate` | import users from other panels (PasarGuard) |
 | `clients` | managed client apps: UA → custom headers + pinned output format |
 | `template` | custom per-format subscription templates (`list`/`show`/`edit`/`preview`/`rm`) |
 | `settings` / `rule` | runtime settings and UA→format detection rules |
@@ -202,6 +203,53 @@ nexon template rm clash         # revert to the built-in generator
 
 Output is validated (YAML/JSON) on save and at render time; on any error Nexon
 falls back to the built-in generator so subscriptions never break.
+
+## Migrating from PasarGuard
+
+Nexon can take over a [PasarGuard](https://github.com/PasarGuard/panel) install
+**without breaking existing subscription links**. PasarGuard tokens are not
+stored anywhere — they are `base64("v3,<user_id>,<timestamp>")` signed with the
+panel's secret key. The import copies that secret and a `user_id` mapping, so
+Nexon verifies and serves every token PasarGuard ever handed out, regardless of
+when it was generated.
+
+```bash
+# 1. Copy the PasarGuard SQLite database next to nexon (or any readable path).
+
+# 2. Preview what would be imported:
+nexon migrate pasarguard db_backup.sqlite --dry-run
+
+# 3. Import. Users keep their name, data limit, used traffic, expiry,
+#    HWID limit and reset strategy; each gets a fresh native sub token:
+nexon migrate pasarguard db_backup.sqlite --group 2
+```
+
+Flags:
+
+| Flag | Meaning |
+|---|---|
+| `--only a,b` / `--skip a,b` | import only / all but these usernames |
+| `--reset-traffic` | zero used traffic instead of carrying it over |
+| `--keep-traffic a,b` | exempt these users from `--reset-traffic` |
+| `--group <id>` | node group for imported users (**important** — a user in the wrong group gets an empty subscription) |
+| `--dry-run` | print the plan, write nothing |
+
+Usernames that already exist in Nexon are not touched — they only get the
+legacy-id mapping, so their old PasarGuard link starts resolving too. Point the
+old subscription domain at Nexon's sub server and the switch is invisible:
+clients keep fetching their old `/sub/<token>` URL forever.
+
+Optionally, [Happ](https://happ-proxy.com) clients can be moved onto their
+native Nexon links: set your provider id from the Happ Proxy Account and legacy responses
+will carry `providerid` + `new-url` headers, which Happ applies on its next
+refresh.
+
+```bash
+nexon settings set sub.happ.providerid <your-provider-id>
+```
+
+Rotating a user's token (`nexon user rotate`) also severs their legacy
+PasarGuard token, so compromise recovery still works.
 
 ## Configuration
 

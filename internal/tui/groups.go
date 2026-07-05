@@ -97,6 +97,15 @@ func (p *groupsPanel) updateList(key tea.KeyMsg) tea.Cmd {
 		if g := p.selected(); g != nil {
 			p.mode = gConfirmDelete
 		}
+	case "s":
+		if g := p.selected(); g != nil && !g.IsDefault {
+			if err := p.svc.SetDefaultNodeGroup(g.ID); err != nil {
+				p.status = "error: " + err.Error()
+				return nil
+			}
+			p.status = g.Name + " is now the default group"
+			return p.load()
+		}
 	default:
 		var cmd tea.Cmd
 		p.tbl, cmd = p.tbl.Update(key)
@@ -146,9 +155,19 @@ func (p *groupsPanel) updateConfirm(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// defaultGroupID finds the flagged default in a loaded group list.
+func defaultGroupID(groups []*store.NodeGroup) int64 {
+	for _, g := range groups {
+		if g.IsDefault {
+			return g.ID
+		}
+	}
+	return store.DefaultGroupID
+}
+
 // groupName resolves a nullable group id to its display name.
 func groupName(id *int64, groups []*store.NodeGroup) string {
-	gid := store.DefaultGroupID
+	gid := defaultGroupID(groups)
 	if id != nil {
 		gid = *id
 	}
@@ -166,7 +185,7 @@ func nextGroupID(cur *int64, groups []*store.NodeGroup) *int64 {
 	if len(groups) == 0 {
 		return cur
 	}
-	curID := store.DefaultGroupID
+	curID := defaultGroupID(groups)
 	if cur != nil {
 		curID = *cur
 	}
@@ -202,7 +221,7 @@ func (p *groupsPanel) view() string {
 		return formBox.Render(styleErr.Render("Delete group "+name+"?  ") + styleHint.Render("y / n") +
 			"\n" + styleHint.Render("(its nodes/users revert to Default)"))
 	default:
-		help := styleHint.Render("n new · d delete · ↑↓ move · assign in Users/Nodes with g")
+		help := styleHint.Render("n new · s set default · d delete · ↑↓ move · assign in Users/Nodes with g")
 		status := p.status
 		if p.err != nil {
 			status = styleErr.Render("error: " + p.err.Error())

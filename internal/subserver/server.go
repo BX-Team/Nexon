@@ -97,6 +97,14 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	}
 	body, ctype := s.svc.RenderSubscription(format, res.User, res.Endpoints)
 
+	// Legacy PasarGuard token: nudge clients that honor new-url (Happ) onto the native link.
+	if res.Legacy {
+		if pid, err := s.svc.Store().GetSetting(core.SettingHappProviderID); err == nil && pid != "" {
+			w.Header().Set("providerid", pid)
+			w.Header().Set("new-url", s.baseURL+"/sub/"+res.User.SubToken)
+		}
+	}
+
 	// Subscription-userinfo header so clients can show quota/expiry.
 	w.Header().Set("Subscription-Userinfo", subUserinfo(res.User))
 	w.Header().Set("Profile-Update-Interval", "12")

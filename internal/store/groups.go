@@ -1,6 +1,9 @@
 package store
 
-// DefaultGroupID is the seeded "Default" node group; NULL group_id resolves to this.
+import "database/sql"
+
+// DefaultGroupID is the seeded "Default" node group, used as a fallback when no
+// group is flagged is_default. NULL group_id resolves to the flagged group.
 const DefaultGroupID int64 = 1
 
 // NodeGroup routes a set of nodes to a set of users.
@@ -39,9 +42,41 @@ func (s *Store) CreateNodeGroup(name string) (*NodeGroup, error) {
 	return g, nil
 }
 
+// DefaultNodeGroupID returns the group flagged is_default (fallback: seeded id 1).
+func (s *Store) DefaultNodeGroupID() int64 {
+	var id int64
+	if err := s.db.QueryRow(`SELECT id FROM node_groups WHERE is_default=1 LIMIT 1`).Scan(&id); err != nil {
+		return DefaultGroupID
+	}
+	return id
+}
+
+// SetDefaultNodeGroup flags a group as the default (NULL group_id resolves to it).
+func (s *Store) SetDefaultNodeGroup(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var exists int64
+	if err := tx.QueryRow(`SELECT id FROM node_groups WHERE id=?`, id).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE node_groups SET is_default=0 WHERE is_default=1`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE node_groups SET is_default=1 WHERE id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // DeleteNodeGroup removes a group; nodes and users referencing it revert to the default group.
 func (s *Store) DeleteNodeGroup(id int64) error {
-	if id == DefaultGroupID {
+	if id == s.DefaultNodeGroupID() {
 		return ErrNotFound
 	}
 	tx, err := s.db.Begin()

@@ -12,7 +12,7 @@ import (
 
 func init() {
 	rootCmd.AddCommand(groupCmd)
-	groupCmd.AddCommand(groupListCmd, groupAddCmd, groupRmCmd, groupAssignUserCmd, groupAssignNodeCmd)
+	groupCmd.AddCommand(groupListCmd, groupAddCmd, groupRmCmd, groupAssignUserCmd, groupAssignNodeCmd, groupSetDefaultCmd)
 }
 
 var groupCmd = &cobra.Command{Use: "group", Short: "Manage node groups (route users to a subset of nodes)"}
@@ -53,6 +53,17 @@ var groupRmCmd = &cobra.Command{
 			return fmt.Errorf("invalid id %q", args[0])
 		}
 		return statusMsg(svc.DeleteNodeGroup(id), args[0], "group deleted")
+	},
+}
+
+var groupSetDefaultCmd = &cobra.Command{
+	Use: "set-default <group_id>", Short: "Make a group the default (ungrouped users/nodes follow it)", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid id %q", args[0])
+		}
+		return statusMsg(svc.SetDefaultNodeGroup(id), args[0], "group set as default")
 	},
 }
 

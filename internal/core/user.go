@@ -148,6 +148,8 @@ func (s *Service) RotateToken(name string) (*store.User, error) {
 	if err := s.st.UpdateUser(u); err != nil {
 		return nil, err
 	}
+	// A rotation must also cut off imported PasarGuard tokens, or the leak survives it.
+	_ = s.st.DeleteLegacyMapping(u.ID)
 	return u, nil
 }
 

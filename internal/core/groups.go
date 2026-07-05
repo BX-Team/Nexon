@@ -7,10 +7,10 @@ import (
 	"github.com/BX-Team/Nexon/internal/store"
 )
 
-// groupOf resolves a nullable group id to a concrete one (nil = default group).
-func groupOf(g *int64) int64 {
+// groupOf resolves a nullable group id against the current default group.
+func groupOf(g *int64, def int64) int64 {
 	if g == nil {
-		return store.DefaultGroupID
+		return def
 	}
 	return *g
 }
@@ -32,9 +32,24 @@ func (s *Service) CreateNodeGroup(name string) (*store.NodeGroup, error) {
 	return g, nil
 }
 
+// SetDefaultNodeGroup makes a group the default (NULL group_id members follow it)
+// and re-syncs every node, since effective membership of ungrouped users/nodes changes.
+func (s *Service) SetDefaultNodeGroup(id int64) error {
+	if err := s.st.SetDefaultNodeGroup(id); err != nil {
+		return err
+	}
+	_ = s.st.AddLog("info", "node-group", fmt.Sprintf("группа нод #%d назначена группой по умолчанию", id))
+	if nodes, err := s.st.ListNodes(); err == nil {
+		for _, n := range nodes {
+			_ = s.SyncNode(n.Name)
+		}
+	}
+	return nil
+}
+
 // DeleteNodeGroup removes a group; its nodes/users revert to the default group.
 func (s *Service) DeleteNodeGroup(id int64) error {
-	if id == store.DefaultGroupID {
+	if id == s.st.DefaultNodeGroupID() {
 		return fmt.Errorf("нельзя удалить группу по умолчанию")
 	}
 	if err := s.st.DeleteNodeGroup(id); err != nil {

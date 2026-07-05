@@ -90,9 +90,10 @@ func (s *Service) SyncNode(name string) error {
 	if err != nil {
 		return err
 	}
-	nodeGroup := groupOf(n.GroupID)
+	def := s.st.DefaultNodeGroupID()
+	nodeGroup := groupOf(n.GroupID, def)
 	for _, u := range users {
-		if groupOf(u.GroupID) != nodeGroup {
+		if groupOf(u.GroupID, def) != nodeGroup {
 			continue // node only serves its own group
 		}
 		for _, acc := range accountsFor(u, inbounds) {
@@ -115,9 +116,10 @@ func (s *Service) syncUserToNodes(u *store.User) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	userGroup := groupOf(u.GroupID)
+	def := s.st.DefaultNodeGroupID()
+	userGroup := groupOf(u.GroupID, def)
 	for _, n := range nodes {
-		if groupOf(n.GroupID) != userGroup {
+		if groupOf(n.GroupID, def) != userGroup {
 			continue // push only to nodes in the user's group
 		}
 		inbounds, err := s.st.ListInbounds(n.ID)

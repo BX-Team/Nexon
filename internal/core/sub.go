@@ -18,11 +18,18 @@ type SubResult struct {
 	User      *store.User
 	Endpoints []subgen.Endpoint
 	NewDevice bool
+	// Legacy marks a fetch through an imported PasarGuard token (native sub_token did not match).
+	Legacy bool
 }
 
 // Subscription resolves a token, enforces status and HWID limit, and builds connectable endpoints.
 func (s *Service) Subscription(token, ua, hwid, ip string) (*SubResult, error) {
+	legacy := false
 	u, err := s.st.GetUserByToken(token)
+	if errors.Is(err, store.ErrNotFound) {
+		u, err = s.resolveLegacyToken(token)
+		legacy = err == nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,20 +89,21 @@ func (s *Service) Subscription(token, ua, hwid, ip string) (*SubResult, error) {
 	for _, n := range nodes {
 		addrByID[n.ID] = n
 	}
-	userGroup := groupOf(u.GroupID)
+	def := s.st.DefaultNodeGroupID()
+	userGroup := groupOf(u.GroupID, def)
 	eps := subgen.BuildEndpoints(u, inbounds, func(nodeID int64) (string, string) {
 		n, ok := addrByID[nodeID]
 		if !ok {
 			return "", ""
 		}
 		// Only hand out nodes in the user's group.
-		if groupOf(n.GroupID) != userGroup {
+		if groupOf(n.GroupID, def) != userGroup {
 			return "", ""
 		}
 		// Expose the address even if not yet connected so a fresh install still hands out configs.
 		return n.Name, n.Address
 	})
-	return &SubResult{User: u, Endpoints: eps, NewDevice: newDevice}, nil
+	return &SubResult{User: u, Endpoints: eps, NewDevice: newDevice, Legacy: legacy}, nil
 }
 
 // Devices returns a user's registered devices.

@@ -18,7 +18,7 @@ import (
 func init() {
 	rootCmd.AddCommand(userCmd)
 	userCmd.AddCommand(userAddCmd, userListCmd, userShowCmd, userSetCmd,
-		userDisableCmd, userEnableCmd, userResetCmd, userRmCmd, userSubCmd, userDevicesCmd)
+		userDisableCmd, userEnableCmd, userResetCmd, userRotateCmd, userRmCmd, userSubCmd, userDevicesCmd)
 
 	userAddCmd.Flags().String("data-limit", "", "data limit, e.g. 100G (0/empty = unlimited)")
 	userAddCmd.Flags().String("expire", "", "expiry, e.g. 30d or 720h")
@@ -159,6 +159,18 @@ var userResetCmd = &cobra.Command{
 	Use: "reset-traffic <name>", Short: "Reset a user's traffic", Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return statusMsg(svc.ResetTraffic(args[0]), args[0], "traffic reset")
+	},
+}
+
+var userRotateCmd = &cobra.Command{
+	Use: "rotate <name>", Short: "Issue a fresh sub token (old links, incl. legacy PasarGuard ones, stop working)", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		u, err := svc.RotateToken(args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s: token rotated\nnew sub: %s/sub/%s\n", u.Username, strings.TrimRight(cfg.SubBaseURL, "/"), u.SubToken)
+		return nil
 	},
 }
 

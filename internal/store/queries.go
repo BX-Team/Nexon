@@ -39,9 +39,9 @@ func (s *Store) CreateUser(u *User) error {
 		return err
 	}
 	res, err := s.db.Exec(`
-		INSERT INTO users (username, status, data_limit, traffic_reset_strategy, expire_at, hwid_limit, proxies, sub_token, traffic_reset_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		u.Username, string(u.Status), u.DataLimit, u.TrafficResetStrategy, fmtTime(u.ExpireAt), u.HWIDLimit, px, u.SubToken, fmtTime(u.TrafficResetAt))
+		INSERT INTO users (username, status, data_limit, traffic_reset_strategy, expire_at, hwid_limit, proxies, sub_token, traffic_reset_at, group_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.Username, string(u.Status), u.DataLimit, u.TrafficResetStrategy, fmtTime(u.ExpireAt), u.HWIDLimit, px, u.SubToken, fmtTime(u.TrafficResetAt), u.GroupID)
 	if err != nil {
 		return err
 	}
@@ -142,6 +142,24 @@ func (s *Store) UpdateUser(u *User) error {
 // poller never overwrites concurrent CLI/TUI edits with a stale row.
 func (s *Store) AddUserTraffic(userID, delta int64) error {
 	_, err := s.db.Exec(`UPDATE users SET used_traffic = used_traffic + ? WHERE id=?`, delta, userID)
+	return err
+}
+
+// SetLegacyMapping links a PasarGuard user id to a Nexon user for legacy token resolution.
+func (s *Store) SetLegacyMapping(legacyID, userID int64) error {
+	_, err := s.db.Exec(`INSERT INTO legacy_users(legacy_id, user_id) VALUES (?, ?)
+		ON CONFLICT(legacy_id) DO UPDATE SET user_id=excluded.user_id`, legacyID, userID)
+	return err
+}
+
+// GetUserByLegacyID fetches a user through its PasarGuard id mapping.
+func (s *Store) GetUserByLegacyID(legacyID int64) (*User, error) {
+	return scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users JOIN legacy_users ON legacy_users.user_id = users.id WHERE legacy_users.legacy_id = ?`, legacyID))
+}
+
+// DeleteLegacyMapping unlinks any PasarGuard id pointing at the user.
+func (s *Store) DeleteLegacyMapping(userID int64) error {
+	_, err := s.db.Exec(`DELETE FROM legacy_users WHERE user_id=?`, userID)
 	return err
 }
 
