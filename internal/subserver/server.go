@@ -97,23 +97,24 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	}
 	body, ctype := s.svc.RenderSubscription(format, res.User, res.Endpoints)
 
-	// Legacy PasarGuard token: nudge clients that honor new-url (Happ) onto the native link.
-	if res.Legacy {
-		if pid, err := s.svc.Store().GetSetting(core.SettingHappProviderID); err == nil && pid != "" {
-			w.Header().Set("providerid", pid)
-			w.Header().Set("new-url", s.baseURL+"/sub/"+res.User.SubToken)
+	if pid, err := s.svc.Store().GetSetting(core.SettingHappProviderID); err == nil && pid != "" {
+		setHeader(w, "providerid", pid)
+		if res.Legacy {
+			setHeader(w, "new-url", s.baseURL+"/sub/"+res.User.SubToken)
 		}
 	}
 
-	// Subscription-userinfo header so clients can show quota/expiry.
-	w.Header().Set("Subscription-Userinfo", subUserinfo(res.User))
-	w.Header().Set("Profile-Update-Interval", "12")
-	// Set global profile headers and per-client-app custom headers.
+	setHeader(w, "subscription-userinfo", subUserinfo(res.User))
+	setHeader(w, "profile-update-interval", "12")
 	for k, v := range s.svc.SubResponseHeaders(ua) {
-		w.Header().Set(k, v)
+		setHeader(w, k, v)
 	}
 	w.Header().Set("Content-Type", ctype)
 	w.Write(body)
+}
+
+func setHeader(w http.ResponseWriter, key, value string) {
+	w.Header()[key] = []string{value}
 }
 
 func subUserinfo(u *store.User) string {
