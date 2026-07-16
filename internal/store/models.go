@@ -100,6 +100,8 @@ type Inbound struct {
 	SettingsJSON string
 	// Remark overrides the subscription endpoint name; empty = "<node>-<tag>".
 	Remark string
+	// Hidden keeps the inbound provisioned on its node but out of subscriptions.
+	Hidden bool
 }
 
 // Device is a registered client (HWID/UA) for device-limit enforcement.

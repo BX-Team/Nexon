@@ -16,6 +16,7 @@ type AddInboundParams struct {
 	TLS          string
 	SettingsJSON string
 	Remark       string
+	Hidden       bool
 }
 
 // AddInbound registers an inbound on a node and resyncs active users to it.
@@ -39,6 +40,7 @@ func (s *Service) AddInbound(p AddInboundParams) (*store.Inbound, error) {
 		TLS:          p.TLS,
 		SettingsJSON: p.SettingsJSON,
 		Remark:       p.Remark,
+		Hidden:       p.Hidden,
 	}
 	if err := s.st.UpsertInbound(in); err != nil {
 		return nil, err
@@ -57,4 +59,14 @@ func (s *Service) RemoveInbound(nodeName, tag string) error {
 		return err
 	}
 	return s.st.DeleteInbound(n.ID, tag)
+}
+
+// SetInboundHidden hides or shows an inbound in generated subscriptions. Hidden
+// inbounds are still provisioned onto their node.
+func (s *Service) SetInboundHidden(nodeName, tag string, hidden bool) error {
+	n, err := s.st.GetNodeByName(nodeName)
+	if err != nil {
+		return err
+	}
+	return s.st.SetInboundHidden(n.ID, tag, hidden)
 }

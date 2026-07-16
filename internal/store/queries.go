@@ -257,39 +257,35 @@ func (s *Store) DeleteNode(id int64) error {
 }
 
 func (s *Store) ListInbounds(nodeID int64) ([]*Inbound, error) {
-	rows, err := s.db.Query(`SELECT id, node_id, tag, protocol, network, tls, port, settings_json, remark FROM inbounds WHERE node_id=? ORDER BY id`, nodeID)
+	rows, err := s.db.Query(`SELECT id, node_id, tag, protocol, network, tls, port, settings_json, remark, hidden FROM inbounds WHERE node_id=? ORDER BY id`, nodeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*Inbound
-	for rows.Next() {
-		var in Inbound
-		var network, tls sql.NullString
-		if err := rows.Scan(&in.ID, &in.NodeID, &in.Tag, &in.Protocol, &network, &tls, &in.Port, &in.SettingsJSON, &in.Remark); err != nil {
-			return nil, err
-		}
-		in.Network, in.TLS = network.String, tls.String
-		out = append(out, &in)
-	}
-	return out, rows.Err()
+	return scanInbounds(rows)
 }
 
 // ListAllInbounds returns inbounds across all connected nodes, used by subgen.
 func (s *Store) ListAllInbounds() ([]*Inbound, error) {
-	rows, err := s.db.Query(`SELECT id, node_id, tag, protocol, network, tls, port, settings_json, remark FROM inbounds ORDER BY node_id, id`)
+	rows, err := s.db.Query(`SELECT id, node_id, tag, protocol, network, tls, port, settings_json, remark, hidden FROM inbounds ORDER BY node_id, id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanInbounds(rows)
+}
+
+func scanInbounds(rows *sql.Rows) ([]*Inbound, error) {
 	var out []*Inbound
 	for rows.Next() {
 		var in Inbound
 		var network, tls sql.NullString
-		if err := rows.Scan(&in.ID, &in.NodeID, &in.Tag, &in.Protocol, &network, &tls, &in.Port, &in.SettingsJSON, &in.Remark); err != nil {
+		var hidden int
+		if err := rows.Scan(&in.ID, &in.NodeID, &in.Tag, &in.Protocol, &network, &tls, &in.Port, &in.SettingsJSON, &in.Remark, &hidden); err != nil {
 			return nil, err
 		}
 		in.Network, in.TLS = network.String, tls.String
+		in.Hidden = hidden != 0
 		out = append(out, &in)
 	}
 	return out, rows.Err()
@@ -301,14 +297,36 @@ func (s *Store) DeleteInbound(nodeID int64, tag string) error {
 	return err
 }
 
+// UpsertInbound inserts or updates an inbound. It deliberately never touches
+// hidden on conflict: that flag is admin-managed via SetInboundHidden and must
+// survive a re-add / node resync.
 func (s *Store) UpsertInbound(in *Inbound) error {
 	_, err := s.db.Exec(`
-		INSERT INTO inbounds (node_id, tag, protocol, network, tls, port, settings_json, remark)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO inbounds (node_id, tag, protocol, network, tls, port, settings_json, remark, hidden)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(node_id, tag) DO UPDATE SET protocol=excluded.protocol, network=excluded.network,
 			tls=excluded.tls, port=excluded.port, settings_json=excluded.settings_json, remark=excluded.remark`,
-		in.NodeID, in.Tag, in.Protocol, in.Network, in.TLS, in.Port, in.SettingsJSON, in.Remark)
+		in.NodeID, in.Tag, in.Protocol, in.Network, in.TLS, in.Port, in.SettingsJSON, in.Remark, boolToInt(in.Hidden))
 	return err
+}
+
+// SetInboundHidden toggles whether an inbound is excluded from subscriptions.
+func (s *Store) SetInboundHidden(nodeID int64, tag string, hidden bool) error {
+	res, err := s.db.Exec(`UPDATE inbounds SET hidden=? WHERE node_id=? AND tag=?`, boolToInt(hidden), nodeID, tag)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // RegisterDevice records or refreshes a device for a user. Returns the device

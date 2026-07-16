@@ -18,8 +18,15 @@ type nodesMsg struct {
 	err    error
 }
 
+type inboundsMsg struct {
+	nodeID   int64
+	inbounds []*store.Inbound
+	err      error
+}
+
 // nodesPanel lists registered nodes. Creation needs cert files (CLI: `nexon
-// node add`), but group assignment is available here with `g`.
+// node add`), but group assignment is available here with `g`. Pressing enter on
+// a node drills into its inbounds, where `h` toggles subscription visibility.
 type nodesPanel struct {
 	svc    *core.Service
 	tbl    table.Model
@@ -27,6 +34,11 @@ type nodesPanel struct {
 	groups []*store.NodeGroup
 	status string
 	err    error
+
+	inMode   bool
+	inTbl    table.Model
+	inbounds []*store.Inbound
+	curNode  *store.Node
 }
 
 func newNodesPanel(svc *core.Service) panel {
@@ -38,12 +50,25 @@ func newNodesPanel(svc *core.Service) panel {
 		{Title: "GROUP", Width: 12},
 		{Title: "LAST SEEN", Width: 16},
 	}
-	return &nodesPanel{svc: svc, tbl: newStyledTable(cols)}
+	inCols := []table.Column{
+		{Title: "TAG", Width: 18},
+		{Title: "PROTOCOL", Width: 12},
+		{Title: "PORT", Width: 6},
+		{Title: "TRANSPORT", Width: 12},
+		{Title: "SUBSCRIPTION", Width: 14},
+	}
+	return &nodesPanel{svc: svc, tbl: newStyledTable(cols), inTbl: newStyledTable(inCols)}
 }
 
 func (p *nodesPanel) title() string   { return "Nodes" }
-func (p *nodesPanel) capturing() bool { return false }
-func (p *nodesPanel) resize(w, h int) { p.tbl.SetWidth(w); setTableHeight(&p.tbl, h) }
+func (p *nodesPanel) capturing() bool { return p.inMode }
+
+func (p *nodesPanel) resize(w, h int) {
+	p.tbl.SetWidth(w)
+	setTableHeight(&p.tbl, h)
+	p.inTbl.SetWidth(w)
+	setTableHeight(&p.inTbl, h)
+}
 
 func (p *nodesPanel) load() tea.Cmd {
 	svc := p.svc
@@ -57,8 +82,17 @@ func (p *nodesPanel) load() tea.Cmd {
 	}
 }
 
+func (p *nodesPanel) loadInbounds(nodeID int64) tea.Cmd {
+	svc := p.svc
+	return func() tea.Msg {
+		ins, err := svc.Store().ListInbounds(nodeID)
+		return inboundsMsg{nodeID: nodeID, inbounds: ins, err: err}
+	}
+}
+
 func (p *nodesPanel) update(msg tea.Msg) tea.Cmd {
-	if m, ok := msg.(nodesMsg); ok {
+	switch m := msg.(type) {
+	case nodesMsg:
 		p.err = m.err
 		if m.err == nil {
 			p.nodes = m.nodes
@@ -66,12 +100,33 @@ func (p *nodesPanel) update(msg tea.Msg) tea.Cmd {
 			p.tbl.SetRows(p.nodeRows())
 		}
 		return nil
+	case inboundsMsg:
+		if p.curNode != nil && m.nodeID == p.curNode.ID {
+			p.err = m.err
+			if m.err == nil {
+				p.inbounds = m.inbounds
+				p.inTbl.SetRows(p.inboundRows())
+			}
+		}
+		return nil
 	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return nil
 	}
-	if key.String() == "g" {
+	if p.inMode {
+		return p.updateInbounds(key)
+	}
+	switch key.String() {
+	case "enter":
+		if n := p.selected(); n != nil {
+			p.curNode = n
+			p.inMode = true
+			p.status = ""
+			return p.loadInbounds(n.ID)
+		}
+		return nil
+	case "g":
 		if n := p.selected(); n != nil {
 			next := nextGroupID(n.GroupID, p.groups)
 			if err := p.svc.SetNodeGroup(n.ID, next); err != nil {
@@ -85,6 +140,27 @@ func (p *nodesPanel) update(msg tea.Msg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	p.tbl, cmd = p.tbl.Update(key)
+	return cmd
+}
+
+func (p *nodesPanel) updateInbounds(key tea.KeyMsg) tea.Cmd {
+	switch key.String() {
+	case "esc", "q":
+		p.inMode = false
+		p.status = ""
+		return nil
+	case "h":
+		if in := p.selectedInbound(); in != nil && p.curNode != nil {
+			if err := p.svc.SetInboundHidden(p.curNode.Name, in.Tag, !in.Hidden); err != nil {
+				p.status = "error: " + err.Error()
+			} else {
+				return p.loadInbounds(p.curNode.ID)
+			}
+		}
+		return nil
+	}
+	var cmd tea.Cmd
+	p.inTbl, cmd = p.inTbl.Update(key)
 	return cmd
 }
 
@@ -102,6 +178,24 @@ func (p *nodesPanel) nodeRows() []table.Row {
 	return rows
 }
 
+func (p *nodesPanel) inboundRows() []table.Row {
+	rows := make([]table.Row, 0, len(p.inbounds))
+	for _, in := range p.inbounds {
+		vis := "visible"
+		if in.Hidden {
+			vis = "hidden"
+		}
+		transport := in.Network
+		if in.TLS != "" {
+			transport = in.Network + "/" + in.TLS
+		}
+		rows = append(rows, table.Row{
+			in.Tag, in.Protocol, strconv.Itoa(in.Port), transport, vis,
+		})
+	}
+	return rows
+}
+
 func (p *nodesPanel) selected() *store.Node {
 	i := p.tbl.Cursor()
 	if i < 0 || i >= len(p.nodes) {
@@ -110,11 +204,27 @@ func (p *nodesPanel) selected() *store.Node {
 	return p.nodes[i]
 }
 
+func (p *nodesPanel) selectedInbound() *store.Inbound {
+	i := p.inTbl.Cursor()
+	if i < 0 || i >= len(p.inbounds) {
+		return nil
+	}
+	return p.inbounds[i]
+}
+
 func (p *nodesPanel) view() string {
 	if p.err != nil {
 		return styleErr.Render("error: " + p.err.Error())
 	}
-	help := styleHint.Render(fmt.Sprintf("%d nodes · g group · add/remove via `nexon node`", len(p.nodes)))
+	if p.inMode {
+		name := ""
+		if p.curNode != nil {
+			name = p.curNode.Name
+		}
+		help := styleHint.Render(fmt.Sprintf("%s · %d inbounds · h hide/show · esc back", name, len(p.inbounds)))
+		return p.inTbl.View() + "\n" + statusLine(p.status, help)
+	}
+	help := styleHint.Render(fmt.Sprintf("%d nodes · enter inbounds · g group · add/remove via `nexon node`", len(p.nodes)))
 	return p.tbl.View() + "\n" + statusLine(p.status, help)
 }
 

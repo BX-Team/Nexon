@@ -14,7 +14,7 @@ func init() {
 	rootCmd.AddCommand(nodeCmd)
 	nodeCmd.AddCommand(nodeAddCmd, nodeListCmd, nodeShowCmd, nodeRmCmd, nodeSyncCmd, nodeInboundsCmd, inboundCmd)
 
-	inboundCmd.AddCommand(inboundAddCmd, inboundRmCmd)
+	inboundCmd.AddCommand(inboundAddCmd, inboundRmCmd, inboundHideCmd, inboundShowCmd)
 	inboundAddCmd.Flags().String("tag", "", "inbound tag (must match the tag on the node)")
 	inboundAddCmd.Flags().String("protocol", "", "vmess|vless|trojan|shadowsocks")
 	inboundAddCmd.Flags().Int("port", 443, "inbound port")
@@ -22,6 +22,7 @@ func init() {
 	inboundAddCmd.Flags().String("tls", "", "security: tls|reality (empty = none)")
 	inboundAddCmd.Flags().String("settings", "{}", "JSON: sni, host, path, pbk, sid, fp…")
 	inboundAddCmd.Flags().String("remark", "", "subscription display name (empty = <node>-<tag>)")
+	inboundAddCmd.Flags().Bool("hidden", false, "provision users but keep this inbound out of subscriptions")
 	_ = inboundAddCmd.MarkFlagRequired("tag")
 	_ = inboundAddCmd.MarkFlagRequired("protocol")
 
@@ -81,7 +82,7 @@ var nodeShowCmd = &cobra.Command{
 		ins, _ := svc.Store().ListInbounds(n.ID)
 		fmt.Printf("inbounds: %d\n", len(ins))
 		for _, in := range ins {
-			fmt.Printf("  - %s [%s] :%d %s/%s\n", in.Tag, in.Protocol, in.Port, in.Network, in.TLS)
+			fmt.Printf("  - %s [%s] :%d %s/%s%s\n", in.Tag, in.Protocol, in.Port, in.Network, in.TLS, hiddenSuffix(in.Hidden))
 		}
 		return nil
 	},
@@ -113,10 +114,17 @@ var nodeInboundsCmd = &cobra.Command{
 			return err
 		}
 		for _, in := range ins {
-			fmt.Printf("%s\t%s\t:%d\t%s/%s\n", in.Tag, in.Protocol, in.Port, in.Network, in.TLS)
+			fmt.Printf("%s\t%s\t:%d\t%s/%s%s\n", in.Tag, in.Protocol, in.Port, in.Network, in.TLS, hiddenSuffix(in.Hidden))
 		}
 		return nil
 	},
+}
+
+func hiddenSuffix(hidden bool) string {
+	if hidden {
+		return "\t(hidden)"
+	}
+	return ""
 }
 
 var inboundCmd = &cobra.Command{Use: "inbound", Short: "Manage a node's inbounds"}
@@ -133,9 +141,10 @@ var inboundAddCmd = &cobra.Command{
 		tls, _ := cmd.Flags().GetString("tls")
 		settings, _ := cmd.Flags().GetString("settings")
 		remark, _ := cmd.Flags().GetString("remark")
+		hidden, _ := cmd.Flags().GetBool("hidden")
 		in, err := svc.AddInbound(core.AddInboundParams{
 			NodeName: args[0], Tag: tag, Protocol: proto, Port: port,
-			Network: network, TLS: tls, SettingsJSON: settings, Remark: remark,
+			Network: network, TLS: tls, SettingsJSON: settings, Remark: remark, Hidden: hidden,
 		})
 		if err != nil {
 			return err
@@ -151,5 +160,23 @@ var inboundRmCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return statusMsg(svc.RemoveInbound(args[0], args[1]), args[1], "inbound removed")
+	},
+}
+
+var inboundHideCmd = &cobra.Command{
+	Use:   "hide <node> <tag>",
+	Short: "Hide an inbound from subscriptions (still provisioned)",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return statusMsg(svc.SetInboundHidden(args[0], args[1], true), args[1], "inbound hidden")
+	},
+}
+
+var inboundShowCmd = &cobra.Command{
+	Use:   "show <node> <tag>",
+	Short: "Show an inbound in subscriptions again",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return statusMsg(svc.SetInboundHidden(args[0], args[1], false), args[1], "inbound shown")
 	},
 }

@@ -77,9 +77,16 @@ func (s *Service) Subscription(token, ua, hwid, ip string) (*SubResult, error) {
 	}
 	_ = s.st.TouchSub(u.ID, ua)
 
-	inbounds, err := s.st.ListAllInbounds()
+	all, err := s.st.ListAllInbounds()
 	if err != nil {
 		return nil, err
+	}
+	// Hidden inbounds are provisioned but never handed out in a subscription.
+	inbounds := make([]*store.Inbound, 0, len(all))
+	for _, in := range all {
+		if !in.Hidden {
+			inbounds = append(inbounds, in)
+		}
 	}
 	nodes, err := s.st.ListNodes()
 	if err != nil {
